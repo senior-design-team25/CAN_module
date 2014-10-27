@@ -76,7 +76,7 @@ module custom_can_node(
          end else begin
             send = 0;
          end  
-		$display("UART--> get_pt: %d, put_pt: %d. UART Data: %x",get_pt, put_pt, uart_data);
+		$display("UART--> get_pt: %d, put_pt: %d. UART Data: %x(rdy: %d)",get_pt, put_pt, uart_data,ready);
 
     end
 
