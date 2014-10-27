@@ -12,16 +12,19 @@ input resetn;
 input [7:0] data;
 input send;
 output reg ready;
-output UART_TX = tx;
+output UART_TX;
 
 reg tx;
+
+assign UART_TX = tx;
+
 reg [3:0] state;
 
 always @(posedge clock115200 or negedge resetn) begin
     if (!resetn) begin
-        tx <= 1'b1;
-        ready <= 0;
-        state <= 0;
+        tx = 1'b1;
+        ready = 0;
+        state = 0;
     end else begin
         if (state == 0) begin
             tx <= 1'b1;
@@ -32,6 +35,7 @@ always @(posedge clock115200 or negedge resetn) begin
             state <= state == 4'h9 ? 4'h0 : state + 1'b1;
         end
     end
+
 end
 
 endmodule

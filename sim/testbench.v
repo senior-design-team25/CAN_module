@@ -25,6 +25,7 @@ module testbench(CLK, led0, led1);
     output wire led0, led1;
     
 	reg can_clk = 0;
+	reg uart_clk = 0;
 	parameter RUN_LEN = 100;	
 
 	initial begin
@@ -45,5 +46,9 @@ module testbench(CLK, led0, led1);
 		i = i+1;
 		if(i>RUN_LEN) 
 			$finish;
+	end
+
+	always@(uart_clk) begin
+		uart_clk <= #1 ~uart_clk;
 	end
 endmodule

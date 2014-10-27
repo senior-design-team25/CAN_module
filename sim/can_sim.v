@@ -49,6 +49,7 @@ module custom_can_node(
     
     reg[7:0] put_pt = 0;
     reg[7:0] get_pt = 0;
+	reg uart_nrst = 0;
     
     generate
         genvar n;
@@ -62,9 +63,13 @@ module custom_can_node(
     wire ready, tx, uart_clk;
     
     clock_divider clkuart(sys_clk, uart_clk, 868); //115200 baudrate
-    uarttx transmit(uart_data, send, ready, tx, uart_clk);
+    uarttx transmit(can_clk, uart_nrst, uart_data, send, ready, tx);
     
     always@(ready, put_pt) begin
+		if(uart_nrst == 0) begin
+			$display("(%x %x) --> (%x %x)",msg_segments[1],msg_segments[0], uart_msg_buffer[1], uart_msg_buffer[0]);
+		end
+		uart_nrst <= 1;
         if(ready) begin
             if(get_pt != put_pt) begin
                 uart_data <= uart_msg_buffer[get_pt];
