@@ -43,7 +43,7 @@ module custom_can_node(
 /*************************************************************************
 *   UART Instantiation
 **************************************************************************/   
-    reg[7:0] uart_data;
+/*    reg[7:0] uart_data;
     reg[7:0] uart_msg_buffer[127:0];
     wire[7:0] msg_segments[15:0]; // 128 total bits split into single byte segments = 16 segments
     
@@ -84,7 +84,7 @@ module custom_can_node(
 		$display("UART--> get_pt: %d, put_pt: %d. UART Data: %x(rdy: %d)",get_pt, put_pt, uart_data,ready);
 
     end
-
+*/
 /*************************************************************************
 *   State machine constants
 **************************************************************************/
@@ -102,11 +102,11 @@ module custom_can_node(
 /*************************************************************************
 *   CAN frame components
 **************************************************************************/
-    reg[1:0] state, next_state;
+    reg[1:0] state = 2'b00, next_state = 2'b00;
     reg toggle = 0;
     reg[31:0] bits_transmitted;
     reg[31:0] bits_received;
-    reg[127:0] message; 
+    reg[127:0] message = 0; 
     
     reg[127:0] received_msg;
     
@@ -114,8 +114,6 @@ module custom_can_node(
     reg[3:0] data_length = 4'b0001;
     reg[7:0] data[7:0];
     reg[14:0] CRC = 15'h0000;
-    
-    reg[10:0] received_id;
     
     parameter EOF = 7'h7F;
     // Extended format versus standard format base length
@@ -136,6 +134,8 @@ module custom_can_node(
                 */
                 bits_transmitted <= 0;
                 bits_received <= 0;
+				can_hi_out <= 0;
+				can_lo_out <= 1;
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
                 // Test with random data transmission
@@ -150,7 +150,7 @@ module custom_can_node(
                 $display("%b",message);
                 // UART transmit message
                 //for(i=0; i < (msg_length / 8)+1; i=i+1) begin
-                for(i=0; i<17; i=i+1) begin
+                /*for(i=0; i<17; i=i+1) begin
                     // while statement would not synthesize (would not converge after 2000 iterations
                     if(i<16) 
                         uart_msg_buffer[put_pt] <= msg_segments[15-i]; 
@@ -158,8 +158,7 @@ module custom_can_node(
                         uart_msg_buffer[put_pt] <= 8'h0A; // Newline
                     put_pt = put_pt + 1;
                 end
-                received_id = 0;
-                
+                */
                 can_hi_out = can_hi_in;
                 can_lo_out = can_lo_in;
                 // For now always transmit
@@ -207,7 +206,7 @@ module custom_can_node(
         led1 = state[0];
     end
     
-    always@(posedge clk) begin
+    always@(posedge can_clk) begin
         if (reset) 
             state <= 0;
         else

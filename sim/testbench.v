@@ -26,7 +26,7 @@ module testbench(CLK, led0, led1);
     
 	reg can_clk = 0;
 	reg uart_clk = 0;
-	parameter RUN_LEN = 100;	
+	parameter RUN_LEN = 120;	
 
 	initial begin
 		can_clk = 0;
@@ -42,13 +42,10 @@ module testbench(CLK, led0, led1);
 	integer i=0;
 	always@(can_clk) begin
 		can_clk <= #10 ~can_clk;
-		$write("%d: ",i);
+		if(can_clk)
+			$write("%d: ",i);
 		i = i+1;
 		if(i>RUN_LEN) 
 			$finish;
-	end
-
-	always@(uart_clk) begin
-		uart_clk <= #1 ~uart_clk;
 	end
 endmodule
