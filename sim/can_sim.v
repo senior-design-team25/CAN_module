@@ -117,7 +117,7 @@ module custom_can_node(
                 end else begin
                     // Dominant = Logic 0 = High voltage
                     // Recessive = Logic 1 = Low voltage
-                    can_hi_out = can_hi_in | !message[(msg_length-1) - bits_transmitted];    
+                    can_hi_out = !message[(msg_length-1) - bits_transmitted];    
 					can_lo_out = !can_hi_out;
                     received_msg = {received_msg, can_lo_out};
                 end
