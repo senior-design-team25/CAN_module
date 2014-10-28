@@ -39,55 +39,6 @@ module custom_can_node(
     output led2, led3;
 
 /*************************************************************************
-*   CLK Source
-**************************************************************************/  
- 
-/*************************************************************************
-*   UART Instantiation
-**************************************************************************/   
-/*    reg[7:0] uart_data;
-    reg[7:0] uart_msg_buffer[127:0];
-    wire[7:0] msg_segments[15:0]; // 128 total bits split into single byte segments = 16 segments
-    
-    reg[7:0] put_pt = 0;
-    reg[7:0] get_pt = 0;
-	reg uart_nrst = 0;
-    
-    generate
-        genvar n;
-        for(n=0; n<16; n=n+1) begin
-            // Assign byte segments of message into indexable array for UART transmission
-            assign msg_segments[n] = message[(n*8)+:8];
-        end
-    endgenerate
-    reg send = 0;
-    
-    wire ready, tx, uart_clk;
-    
-    clock_divider clkuart(sys_clk, uart_clk, 868); //115200 baudrate
-    uarttx transmit(can_clk, uart_nrst, uart_data, send, ready, tx);
-    
-    always@(ready, put_pt) begin
-		if(uart_nrst == 0) begin
-			$display("(%x %x) --> (%x %x)",msg_segments[1],msg_segments[0], uart_msg_buffer[1], uart_msg_buffer[0]);
-		end
-		uart_nrst <= 1;
-        if(ready) begin
-            if(get_pt != put_pt) begin
-                uart_data <= uart_msg_buffer[get_pt];
-                send = 1;
-                get_pt = get_pt + 1;
-                if(get_pt > 127)
-                    get_pt = 0;
-            end
-         end else begin
-            send = 0;
-         end  
-		$display("UART--> get_pt: %d, put_pt: %d. UART Data: %x(rdy: %d)",get_pt, put_pt, uart_data,ready);
-
-    end
-*/
-/*************************************************************************
 *   State machine constants
 **************************************************************************/
     /* 4 states for CAN node:
@@ -106,6 +57,9 @@ module custom_can_node(
 **************************************************************************/
     reg[1:0] state = 2'b00, next_state = 2'b00;
     reg toggle = 0;
+	reg can_hi, can_lo;
+	reg id_transmit_flag;
+	reg lower_priority = 0;
     reg[31:0] bits_transmitted;
     reg[31:0] bits_received;
     reg[127:0] message = 0; 
@@ -128,7 +82,6 @@ module custom_can_node(
     integer index = 0;
     
     always@(state, toggle) begin
-        $display("NODE: %d => State: %d, CANout: (%d, %d)",node_num, state, can_hi_out, can_lo_out);
         case(state)
             IDLE: begin    // IDLE
                 /*
@@ -149,19 +102,6 @@ module custom_can_node(
                 message = {message, {CRC},3'b101,EOF};
                 
                 $display("NODE: %d => (Message: %x (len: %d))",node_num, message, msg_length);                
-                // UART transmit message
-                //for(i=0; i < (msg_length / 8)+1; i=i+1) begin
-                /*for(i=0; i<17; i=i+1) begin
-                    // while statement would not synthesize (would not converge after 2000 iterations
-                    if(i<16) 
-                        uart_msg_buffer[put_pt] <= msg_segments[15-i]; 
-                    else
-                        uart_msg_buffer[put_pt] <= 8'h0A; // Newline
-                    put_pt = put_pt + 1;
-                end
-                */
-                can_hi_out = can_hi_in;
-                can_lo_out = can_lo_in;
                 // For now always transmit
                 next_state <= 1; 
             end
@@ -169,19 +109,26 @@ module custom_can_node(
                 // Check transmitted bit with bus
                 // If not equal, lower priority. Kick off bus
                 // Takes cycle to latch output bit, so check next cycle
-                if( (can_hi_out != can_hi_in) || (can_lo_out != can_lo_in) ) begin
+                if( lower_priority ) begin
                      bits_transmitted = msg_length - 1;
                      received_msg = {received_msg, can_lo_in};
                 end else begin
                     // Dominant = Logic 0 = High voltage
                     // Recessive = Logic 1 = Low voltage
-                    can_hi_out = !message[(msg_length-1) - bits_transmitted];    
-                    can_lo_out = message[(msg_length-1) - bits_transmitted];
+                    can_hi_out = can_hi_in | !message[(msg_length-1) - bits_transmitted];    
+					can_lo_out = !can_hi_out;
                     received_msg = {received_msg, can_lo_out};
                 end
                 
                 bits_transmitted = bits_transmitted + 1;
                 bits_received = bits_received + 1;
+		
+				// While sending id/start bit, set id_transmit flag hi	
+				if(bits_transmitted < 13) 
+					id_transmit_flag <= 1;
+				else
+					id_transmit_flag <= 0;
+
                 if(bits_transmitted < msg_length) begin
                     next_state <= SENDING;
                 end else begin
@@ -192,13 +139,15 @@ module custom_can_node(
                 // Currently not checking for bit stuffing since it's not yet implemented 
                 // Check for end of frame
                 bits_received = bits_received + 1;
+				can_hi_out <= 0;
+				can_lo_out <= 1;
                 if( (received_msg[6:0] != 7'h7F)  && bits_received >= msg_length_base) begin
                     received_msg = {received_msg, can_lo_in};
                     next_state <= WAIT;
                 end else begin
                     next_state <= PROCESS;
                 end
-            end
+            end	
             PROCESS: begin    // PROCESS
                 next_state <= 0;
             end
@@ -206,7 +155,19 @@ module custom_can_node(
         led0 = state[1];
         led1 = state[0];
     end
-    
+  
+	// Check to see if message id lower priority 
+	always@(negedge can_clk) begin
+		if(can_hi_out != can_hi_in && id_transmit_flag) begin
+			lower_priority <= 1; 
+		end else begin
+			lower_priority <= 0;
+		end
+        $display("NODE: %d => State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
+		can_hi_out = 0;
+		can_lo_out = 1;
+	end
+ 
     always@(posedge can_clk) begin
         if (reset) 
             state <= 0;

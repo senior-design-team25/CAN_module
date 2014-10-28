@@ -18,7 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+//`define SINGLE_NODE
 
 module testbench(CLK, led0, led1, led2, led3);
     input CLK;
@@ -37,20 +37,43 @@ module testbench(CLK, led0, led1, led2, led3);
     wire can_lo_out_1, can_hi_out_1;
 	wire can_lo_in_1, can_hi_in_1;
 
-
+`ifndef SINGLE_NODE
 	assign can_lo_in_0 = can_lo_out_1;
 	assign can_hi_in_0 = can_hi_out_1;
 	assign can_lo_in_1 = can_lo_out_0;
 	assign can_hi_in_1 = can_lo_out_0;
-
-    custom_can_node can0(can_clk, can_clk, 0, can_lo_in_0, can_lo_out_0, can_hi_in_0, can_hi_out_0, led0, led1, 4'h0);
-	custom_can_node can1(can_clk, can_clk, 0, can_lo_in_1, can_lo_out_1, can_hi_in_1, can_hi_out_1, led2, led3, 4'h1);
+`else
+	assign can_lo_in_0 = can_lo_out_0;
+	assign can_hi_in_0 = can_hi_out_0;
+`endif
+    custom_can_node can0(   can_clk, 
+							can_clk, 
+							0, 
+							can_lo_in_0, 
+							can_lo_out_0, 
+							can_hi_in_0, 
+							can_hi_out_0, 
+							led0, 
+							led1, 
+							4'h0 
+						);
+`ifndef SINGLE_NODE
+	custom_can_node can1(	can_clk, 
+							can_clk, 
+							0, 
+							can_lo_in_1, 
+							can_lo_out_1, 
+							can_hi_in_1, 
+							can_hi_out_1, 
+							led2, 
+							led3, 
+							4'h1
+						);
+`endif
 
 	integer i=0;
 	always@(can_clk) begin
 		can_clk <= #10 ~can_clk;
-		if(can_clk)
-			//$write("%d: ",i);
 		i = i+1;
 		if(i>RUN_LEN) 
 			$finish;
