@@ -25,5 +25,8 @@ run:
 log:
 	vvp $(EXECUTABLE) > $(LOG)
 
+filter:
+	python filter.py
+
 clean: 
 	rm -rf *o $(EXECUTABLE)

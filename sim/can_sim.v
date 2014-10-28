@@ -66,7 +66,7 @@ module custom_can_node(
     
     reg[127:0] received_msg;
     
-    reg[10:0] message_id = 11'h123;
+    reg[10:0] message_id;
     reg[3:0] data_length = 4'b0001;
     reg[7:0] data[7:0];
     reg[14:0] CRC = 15'h0000;
@@ -89,8 +89,10 @@ module custom_can_node(
                 */
                 bits_transmitted <= 0;
                 bits_received <= 0;
+                received_msg <= 0;
 				can_hi_out <= 0;
 				can_lo_out <= 1;
+                message_id = (node_num[0]) ? 11'h123 : 11'h456;
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
                 // Test with random data transmission
@@ -141,7 +143,8 @@ module custom_can_node(
                 bits_received = bits_received + 1;
 				can_hi_out <= 0;
 				can_lo_out <= 1;
-                if( (received_msg[6:0] != 7'h7F)  && bits_received >= msg_length_base) begin
+                //if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
+                if(bits_received <= msg_length_base) begin
                     received_msg = {received_msg, can_lo_in};
                     next_state <= WAIT;
                 end else begin
@@ -163,7 +166,7 @@ module custom_can_node(
 		end else begin
 			lower_priority <= 0;
 		end
-        $display("NODE: %d => State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
+        $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
 		can_hi_out = 0;
 		can_lo_out = 1;
 	end
