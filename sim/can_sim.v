@@ -167,8 +167,6 @@ module custom_can_node(
 			lower_priority <= 0;
 		end
         $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
-		can_hi_out = 0;
-		can_lo_out = 1;
 	end
  
     always@(posedge can_clk) begin
