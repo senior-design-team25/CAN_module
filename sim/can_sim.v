@@ -29,10 +29,12 @@ module custom_can_node(
         can_hi_in,
         can_hi_out, 
         led0, 
-        led1
+        led1,
+		node_num
     );
     input can_clk, sys_clk, reset, can_lo_in, can_hi_in;
     input wire clk_src0, clk_src1;
+	input wire[3:0] node_num;
     output reg can_lo_out, can_hi_out, led0, led1;
     output led2, led3;
 
@@ -126,7 +128,7 @@ module custom_can_node(
     integer index = 0;
     
     always@(state, toggle) begin
-        $display("State: %d, CANout: (%d, %d)",state, can_hi_out, can_lo_out);
+        $display("NODE: %d => State: %d, CANout: (%d, %d)",node_num, state, can_hi_out, can_lo_out);
         case(state)
             IDLE: begin    // IDLE
                 /*
@@ -146,8 +148,7 @@ module custom_can_node(
                 end
                 message = {message, {CRC},3'b101,EOF};
                 
-                $display("Message: %x (len: %d)",message, msg_length);                
-                $display("%b",message);
+                $display("NODE: %d => (Message: %x (len: %d))",node_num, message, msg_length);                
                 // UART transmit message
                 //for(i=0; i < (msg_length / 8)+1; i=i+1) begin
                 /*for(i=0; i<17; i=i+1) begin
