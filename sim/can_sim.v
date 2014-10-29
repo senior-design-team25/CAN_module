@@ -109,6 +109,7 @@ module custom_can_node(
                 // For now always transmit
                 next_state <= 1; 
             end
+
             SENDING: begin    // SENDING
                 // Check transmitted bit with bus
                 // If not equal, lower priority. Kick off bus
@@ -119,17 +120,23 @@ module custom_can_node(
                 end else begin
                     // Dominant = Logic 0 = High voltage
                     // Recessive = Logic 1 = Low voltage
-                    // Bit stuffing
-                    if( ((bit_stuff_check == 5'b0) && message[(msg_length-1)-bits_transmitted]) ||
-                            ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
-                            ) begin
-                        can_hi_out = !bit_stuff_check[0];
-                        can_lo_out = can_hi_out;
-                        bits_transmitted = bits_transmitted - 1;
+                    // Bit stuffing. Should not bit stuff during CRC and EoF transmission
+                    if(bits_transmitted < (msg_length - 25)) begin
+                        if( ((bit_stuff_check == 5'b0) && message[(msg_length-1)-bits_transmitted]) ||
+                                ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
+                             ) begin
+                            can_hi_out = !bit_stuff_check[0];
+                            can_lo_out = can_hi_out;
+                            bits_transmitted = bits_transmitted - 1;
+                        end else begin
+                            can_hi_out = !message[(msg_length-1) - bits_transmitted];    
+					        can_lo_out = !can_hi_out;
+                        end
                     end else begin
                         can_hi_out = !message[(msg_length-1) - bits_transmitted];    
 					    can_lo_out = !can_hi_out;
                     end
+                 
                     received_msg = {received_msg, can_lo_out};
                     bit_stuff_check = {bit_stuff_check[3:0],can_hi_out};
                 end
@@ -149,6 +156,7 @@ module custom_can_node(
                     next_state <= WAIT;
                 end 
             end
+
             WAIT: begin    // WAIT RX 
                 // Currently not checking for bit stuffing since it's not yet implemented 
                 // Check for end of frame
@@ -163,6 +171,7 @@ module custom_can_node(
                     next_state <= PROCESS;
                 end
             end	
+
             PROCESS: begin    // PROCESS
                 next_state <= 0;
             end
