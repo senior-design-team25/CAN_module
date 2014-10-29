@@ -30,11 +30,11 @@ module custom_can_node(
         can_hi_out, 
         led0, 
         led1,
-		node_num
+        node_num
     );
     input can_clk, sys_clk, reset, can_lo_in, can_hi_in;
     input wire clk_src0, clk_src1;
-	input wire[3:0] node_num;
+    input wire[3:0] node_num;
     output reg can_lo_out, can_hi_out, led0, led1;
     output led2, led3;
 
@@ -57,9 +57,9 @@ module custom_can_node(
 **************************************************************************/
     reg[1:0] state = 2'b00, next_state = 2'b00;
     reg toggle = 0;
-	reg can_hi, can_lo;
-	reg id_transmit_flag;
-	reg lower_priority = 0;
+    reg can_hi, can_lo;
+    reg id_transmit_flag;
+    reg lower_priority = 0;
     reg[31:0] bits_transmitted;
     reg[31:0] bits_received;
     reg[127:0] message = 0; 
@@ -92,8 +92,8 @@ module custom_can_node(
                 bits_transmitted <= 0;
                 bits_received <= 0;
                 received_msg <= 0;
-				can_hi_out <= 0;
-				can_lo_out <= 1;
+                can_hi_out <= 0;
+                can_lo_out <= 1;
                 message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
@@ -130,12 +130,12 @@ module custom_can_node(
                             bits_transmitted = bits_transmitted - 1;
                         end else begin
                             can_hi_out = !message[(msg_length-1) - bits_transmitted];    
-					        can_lo_out = !can_hi_out;
+                            can_lo_out = !can_hi_out;
                             received_msg = {received_msg, can_lo_out};
                         end
                     end else begin
                         can_hi_out = !message[(msg_length-1) - bits_transmitted];    
-					    can_lo_out = !can_hi_out;
+                        can_lo_out = !can_hi_out;
                         received_msg = {received_msg, can_lo_out};
                     end
                  
@@ -144,12 +144,12 @@ module custom_can_node(
                 
                 bits_transmitted = bits_transmitted + 1;
                 bits_received = bits_received + 1;
-		
-				// While sending id/start bit, set id_transmit flag hi	
-				if(bits_transmitted < 13) 
-					id_transmit_flag <= 1;
-				else
-					id_transmit_flag <= 0;
+        
+                // While sending id/start bit, set id_transmit flag hi    
+                if(bits_transmitted < 13) 
+                    id_transmit_flag <= 1;
+                else
+                    id_transmit_flag <= 0;
 
                 if(bits_transmitted < msg_length) begin
                     next_state <= SENDING;
@@ -160,8 +160,8 @@ module custom_can_node(
 
             WAIT: begin    // WAIT RX 
                 bits_received = bits_received + 1;
-				can_hi_out <= 0;
-				can_lo_out <= 1;
+                can_hi_out <= 0;
+                can_lo_out <= 1;
                 // Check for end of frame
                 if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
                     received_msg = {received_msg, can_lo_in};
@@ -169,7 +169,7 @@ module custom_can_node(
                 end else begin
                     next_state <= PROCESS;
                 end
-            end	
+            end    
 
             PROCESS: begin    // PROCESS
                 $display("NODE: %d, Received message: %x",node_num, received_msg);
@@ -180,15 +180,15 @@ module custom_can_node(
         led1 = state[0];
     end
   
-	// Check to see if message id lower priority 
-	always@(negedge can_clk) begin
-		if(can_hi_out != can_hi_in && id_transmit_flag) begin
-			lower_priority <= 1; 
-		end else begin
-			lower_priority <= 0;
-		end
+    // Check to see if message id lower priority 
+    always@(negedge can_clk) begin
+        if(can_hi_out != can_hi_in && id_transmit_flag) begin
+            lower_priority <= 1; 
+        end else begin
+            lower_priority <= 0;
+        end
         $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
-	end
+    end
  
     always@(posedge can_clk) begin
         if (reset) 
