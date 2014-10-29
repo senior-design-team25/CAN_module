@@ -80,7 +80,9 @@ module custom_can_node(
     reg[7:0] msg_length = 0;
     integer i = 0;
     integer index = 0;
-    
+   
+    reg[4:0] bit_stuff_check = 5'b00001;
+ 
     always@(state, toggle) begin
         case(state)
             IDLE: begin    // IDLE
@@ -92,7 +94,7 @@ module custom_can_node(
                 received_msg <= 0;
 				can_hi_out <= 0;
 				can_lo_out <= 1;
-                message_id = (node_num[0]) ? 11'h123 : 11'h456;
+                message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
                 // Test with random data transmission
@@ -117,9 +119,19 @@ module custom_can_node(
                 end else begin
                     // Dominant = Logic 0 = High voltage
                     // Recessive = Logic 1 = Low voltage
-                    can_hi_out = !message[(msg_length-1) - bits_transmitted];    
-					can_lo_out = !can_hi_out;
+                    // Bit stuffing
+                    if( ((bit_stuff_check == 5'b0) && message[(msg_length-1)-bits_transmitted]) ||
+                            ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
+                            ) begin
+                        can_hi_out = !bit_stuff_check[0];
+                        can_lo_out = can_hi_out;
+                        bits_transmitted = bits_transmitted - 1;
+                    end else begin
+                        can_hi_out = !message[(msg_length-1) - bits_transmitted];    
+					    can_lo_out = !can_hi_out;
+                    end
                     received_msg = {received_msg, can_lo_out};
+                    bit_stuff_check = {bit_stuff_check[3:0],can_hi_out};
                 end
                 
                 bits_transmitted = bits_transmitted + 1;
@@ -143,8 +155,8 @@ module custom_can_node(
                 bits_received = bits_received + 1;
 				can_hi_out <= 0;
 				can_lo_out <= 1;
-                //if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
-                if(bits_received <= msg_length_base) begin
+                if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
+                //if(bits_received <= msg_length_base) begin
                     received_msg = {received_msg, can_lo_in};
                     next_state <= WAIT;
                 end else begin
