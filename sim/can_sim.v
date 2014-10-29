@@ -131,13 +131,14 @@ module custom_can_node(
                         end else begin
                             can_hi_out = !message[(msg_length-1) - bits_transmitted];    
 					        can_lo_out = !can_hi_out;
+                            received_msg = {received_msg, can_lo_out};
                         end
                     end else begin
                         can_hi_out = !message[(msg_length-1) - bits_transmitted];    
 					    can_lo_out = !can_hi_out;
+                        received_msg = {received_msg, can_lo_out};
                     end
                  
-                    received_msg = {received_msg, can_lo_out};
                     bit_stuff_check = {bit_stuff_check[3:0],can_hi_out};
                 end
                 
@@ -158,13 +159,11 @@ module custom_can_node(
             end
 
             WAIT: begin    // WAIT RX 
-                // Currently not checking for bit stuffing since it's not yet implemented 
-                // Check for end of frame
                 bits_received = bits_received + 1;
 				can_hi_out <= 0;
 				can_lo_out <= 1;
+                // Check for end of frame
                 if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
-                //if(bits_received <= msg_length_base) begin
                     received_msg = {received_msg, can_lo_in};
                     next_state <= WAIT;
                 end else begin
@@ -173,6 +172,7 @@ module custom_can_node(
             end	
 
             PROCESS: begin    // PROCESS
+                $display("NODE: %d, Received message: %x",node_num, received_msg);
                 next_state <= 0;
             end
         endcase   
