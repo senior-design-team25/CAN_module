@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<EDKSYSTEM EDWVERSION="1.2" TIMESTAMP="Sat Nov 22 20:43:08 2014" VIVADOVERSION="2014.3.1">
+
+  <SYSTEMINFO ARCH="zynq" BOARD="em.avnet.com:zed:part0:1.2" DEVICE="7z020" NAME="design_1_imp" PACKAGE="clg484" SPEEDGRADE="-1"/>
+
+  <EXTERNALPORTS/>
+
+  <MODULES/>
+
+  <REPOSITORIES/>
+
+</EDKSYSTEM>

@@ -1,0 +1,11 @@
+#-----------------------------------------------------------
+# Vivado v2014.3.1 (64-bit)
+# SW Build 1056140 on Thu Oct 30 17:03:40 MDT 2014
+# IP Build 1028902 on Fri Sep 26 17:35:13 MDT 2014
+# Start of session at: Wed Nov 12 13:57:37 2014
+# Process ID: 19944
+# Log file: C:/Users/splee_000/Documents/senior design/CAN_module/CAN_module.srcs/sources_1/ip/can_1/vivado.log
+# Journal file: C:/Users/splee_000/Documents/senior design/CAN_module/CAN_module.srcs/sources_1/ip/can_1\vivado.jou
+#-----------------------------------------------------------
+start_gui
+open_checkpoint {C:\Users\splee_000\Documents\senior design\CAN_module\CAN_module.srcs\sources_1\ip\can_1\can_1.dcp}
