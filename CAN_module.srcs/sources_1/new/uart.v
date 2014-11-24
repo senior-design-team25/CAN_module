@@ -4,7 +4,7 @@
 
 module uarttx(data, send, ready, tx, clk);
 
-parameter DIV;
+//parameter DIV;
 
 input [7:0] data;
 input send;
@@ -12,19 +12,17 @@ output ready;
 output reg tx;
 input clk;
 
-wire uclk;
 wire fsend;
 reg [3:0] state = 0;
 
 assign ready = state == 0;
 
-flag (send, fsend, state == 1);
-div #(DIV) (clk, uclk);
+//flag f(send, fsend, state == 1);
 
-always @(posedge uclk) begin
+always @(posedge clk) begin
     if (state == 0) begin
         tx <= 1'b1;
-        state <= fsend ? 1 : 0;
+        state <= send ? 1 : 0;
     end else begin
         tx <= state == 1 ? 1'b0 : data[state-2];
         state <= state == 9 ? 0 : state + 1;
@@ -33,7 +31,7 @@ end
 
 endmodule
 
-
+/*
 module uartrx(data, recv, rx, clk);
 
 parameter DIV;
@@ -91,3 +89,4 @@ input clk;
 uartrx #(434) (data, recv, rx, clk);
 
 endmodule
+*/
