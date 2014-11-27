@@ -33,12 +33,14 @@ module custom_can_node(
         led0, 
         led1,
         led2,
-        led3
+        led3,
+        UART_TX
     );
     input can_clk, sys_clk, reset, can_lo_in, can_hi_in;
     input wire clk_src0, clk_src1;
     output reg can_lo_out, can_hi_out, led0, led1;
     output led2, led3;
+    output UART_TX;
 
 /*************************************************************************
 *   CLK Source
@@ -69,6 +71,7 @@ module custom_can_node(
     
     reg[7:0] put_pt = 0;
     reg[7:0] get_pt = 0;
+    reg uart_nrst = 0;
     
     generate
         genvar n;
@@ -80,22 +83,24 @@ module custom_can_node(
     reg send = 0;
     
     wire ready, tx, uart_clk;
+    assign UART_TX = tx;
     
     clock_divider clkuart(sys_clk, uart_clk, 868); //115200 baudrate
-    uarttx transmit(uart_data, send, ready, tx, uart_clk);
-    
-    always@(ready, put_pt, uart_msg_buffer) begin
-        if(ready) begin
-            if(get_pt != put_pt) begin
+    uarttx transmit(can_clk, uart_nrst, uart_data, send, ready, tx);
+       
+    always@(ready, put_pt) begin
+       uart_nrst <= 1;
+       if(ready) begin
+           if(get_pt != put_pt) begin
                 uart_data <= uart_msg_buffer[get_pt];
                 send = 1;
                 get_pt = get_pt + 1;
                 if(get_pt > 127)
                     get_pt = 0;
-            end
-         end else begin
-            send = 0;
-         end  
+                end
+            end else begin
+               send = 0;
+            end   
     end
 
 /*************************************************************************
@@ -118,12 +123,17 @@ module custom_can_node(
     reg[1:0] state, next_state;
     reg toggle = 0;
     reg[31:0] bits_transmitted;
+    reg[31:0] bits_received;
     reg[127:0] message; 
+    
+    reg[127:0] received_msg;
     
     reg[10:0] message_id = 11'h123;
     reg[3:0] data_length = 4'b0001;
     reg[7:0] data[7:0];
-    reg[14:0] CRC;
+    reg[14:0] CRC = 15'h0000;
+    
+    reg[10:0] received_id;
     
     parameter EOF = 7'h7F;
     // Extended format versus standard format base length
@@ -142,6 +152,7 @@ module custom_can_node(
                 *   Generate message if want to transmit. If no message to send, listen to bus. Else transmit
                 */
                 bits_transmitted <= 0;
+                bits_received <= 0;
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
                 // Test with random data transmission
@@ -162,7 +173,10 @@ module custom_can_node(
                         uart_msg_buffer[put_pt] <= 8'h0A; // Newline
                     put_pt = put_pt + 1;
                 end
+                received_id = 0;
                 
+                can_hi_out = can_hi_in;
+                can_lo_out = can_lo_in;
                 // For now always transmit
                 next_state <= 1; 
             end
@@ -170,25 +184,35 @@ module custom_can_node(
                 // Check transmitted bit with bus
                 // If not equal, lower priority. Kick off bus
                 // Takes cycle to latch output bit, so check next cycle
-                //if( (can_hi_out != can_hi_in) || (can_lo_out != can_lo_in) ) begin
-                if(0) begin
+                if( (can_hi_out != can_hi_in) || (can_lo_out != can_lo_in) ) begin
                      bits_transmitted = msg_length - 1;
+                     received_msg = {received_msg, can_lo_in};
                 end else begin
                     // Dominant = Logic 0 = High voltage
                     // Recessive = Logic 1 = Low voltage
                     can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                     can_lo_out = message[(msg_length-1) - bits_transmitted];
+                    received_msg = {received_msg, can_lo_out};
                 end
                 
                 bits_transmitted = bits_transmitted + 1;
+                bits_received = bits_received + 1;
                 if(bits_transmitted < msg_length) begin
                     next_state <= SENDING;
                 end else begin
                     next_state <= WAIT;
                 end 
             end
-            WAIT: begin    // WAIT RX
-                next_state <= 3;
+            WAIT: begin    // WAIT RX 
+                // Currently not checking for bit stuffing since it's not yet implemented 
+                // Check for end of frame
+                bits_received = bits_received + 1;
+                if( (received_msg[6:0] != 7'h7F)  && bits_received >= msg_length_base) begin
+                    received_msg = {received_msg, can_lo_in};
+                    next_state <= WAIT;
+                end else begin
+                    next_state <= PROCESS;
+                end
             end
             PROCESS: begin    // PROCESS
                 next_state <= 0;
