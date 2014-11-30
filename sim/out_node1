@@ -45,6 +45,7 @@ NODE:  1, State: 2, CANout: (0, 1), CANin: (1, 0)
 NODE:  1, State: 2, CANout: (0, 1), CANin: (1, 0)
 NODE:  1, State: 2, CANout: (0, 1), CANin: (1, 0)
 NODE:  1, State: 2, CANout: (0, 1), CANin: (0, 1)
+NODE:  1, Received message: 0000000000000000000003ff04624000
 NODE:  1, State: 3, CANout: (0, 1), CANin: (1, 0)
 NODE:  1 => (Message: 00000000000000000003ff83120002ff (len:  52))
 NODE:  1, State: 0, CANout: (0, 1), CANin: (0, 1)
