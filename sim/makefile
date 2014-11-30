@@ -27,6 +27,7 @@ log:
 
 filter:
 	python filter.py
+	vim out_node1    
 
 clean: 
 	rm -rf *o $(EXECUTABLE)

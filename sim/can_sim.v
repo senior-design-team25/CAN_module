@@ -65,6 +65,7 @@ module custom_can_node(
     reg[127:0] message = 0; 
     
     reg[127:0] received_msg;
+    reg receive_rst = 1;
     
     reg[10:0] message_id;
     reg[3:0] data_length = 4'b0001;
@@ -91,7 +92,8 @@ module custom_can_node(
                 */
                 bits_transmitted <= 0;
                 bits_received <= 0;
-                received_msg <= 0;
+                //received_msg <= 0;
+                receive_rst <= 1;
                 can_hi_out <= 0;
                 can_lo_out <= 1;
                 message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
@@ -105,45 +107,45 @@ module custom_can_node(
                 end
                 message = {message, {CRC},3'b101,EOF};
                 
-                $display("NODE: %d => (Message: %x (len: %d))",node_num, message, msg_length);                
+                $display("NODE: %d, (Message: %x (len: %d))",node_num, message, msg_length);                
                 // For now always transmit
                 next_state <= 1; 
             end
 
             SENDING: begin    // SENDING
-                // Check transmitted bit with bus
-                // If not equal, lower priority. Kick off bus
-                // Takes cycle to latch output bit, so check next cycle
+                receive_rst <= 0;
+                /* Check transmitted bit with bus
+                 * If not equal, lower priority. Kick off bus
+                 * Takes cycle to latch output bit, so check next cycle
+                 */
                 if( lower_priority ) begin
                      bits_transmitted = msg_length - 1;
-                     received_msg = {received_msg, can_lo_in};
+                     //received_msg = {received_msg, can_lo_in};
                 end else begin
-                    // Dominant = Logic 0 = High voltage
-                    // Recessive = Logic 1 = Low voltage
-                    // Bit stuffing. Should not bit stuff during CRC and EoF transmission
+                    /* Dominant = Logic 0 = High voltage
+                     * Recessive = Logic 1 = Low voltage
+                     * Bit stuffing. Should not bit stuff during CRC and EoF transmission
+                     */
                     if(bits_transmitted < (msg_length - 25)) begin
                         if( ((bit_stuff_check == 5'b0) && message[(msg_length-1)-bits_transmitted]) ||
                                 ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
                              ) begin
                             can_hi_out = !bit_stuff_check[0];
-                            can_lo_out = can_hi_out;
+                            can_lo_out = !can_hi_out;
                             bits_transmitted = bits_transmitted - 1;
                         end else begin
                             can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                             can_lo_out = !can_hi_out;
-                            received_msg = {received_msg, can_lo_out};
                         end
                     end else begin
                         can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                         can_lo_out = !can_hi_out;
-                        received_msg = {received_msg, can_lo_out};
                     end
                  
                     bit_stuff_check = {bit_stuff_check[3:0],can_hi_out};
                 end
                 
                 bits_transmitted = bits_transmitted + 1;
-                bits_received = bits_received + 1;
         
                 // While sending id/start bit, set id_transmit flag hi    
                 if(bits_transmitted < 13) 
@@ -159,12 +161,10 @@ module custom_can_node(
             end
 
             WAIT: begin    // WAIT RX 
-                bits_received = bits_received + 1;
                 can_hi_out <= 0;
                 can_lo_out <= 1;
                 // Check for end of frame
-                if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length_base)) begin
-                    received_msg = {received_msg, can_lo_in};
+                if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length)) begin
                     next_state <= WAIT;
                 end else begin
                     next_state <= PROCESS;
@@ -179,15 +179,25 @@ module custom_can_node(
         led0 = state[1];
         led1 = state[0];
     end
-  
+ 
     // Check to see if message id lower priority 
+    // and fill receive buffer
     always@(negedge can_clk) begin
         if(can_hi_out != can_hi_in && id_transmit_flag) begin
             lower_priority <= 1; 
         end else begin
             lower_priority <= 0;
         end
-        $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
+
+        if(receive_rst) begin
+            received_msg <= 128'b0;
+            bits_received <= 0;
+        end else begin
+            received_msg <= {received_msg, can_lo_in};
+            bits_received <= bits_received + 1;
+        end
+        $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",
+                    node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
     end
  
     always@(posedge can_clk) begin
