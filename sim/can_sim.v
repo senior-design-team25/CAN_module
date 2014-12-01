@@ -163,8 +163,10 @@ module custom_can_node(
                     next_state <= SENDING;
                 end else begin 
                     if(bits_transmitted == 32'h7FFFFFFF) 
+                        // lower priority, kicked off bus
                         next_state <= WAIT;
                     else
+                        // this node was bus master and finished transmission. 
                         next_state <= PROCESS;
                 end
             end
@@ -181,7 +183,6 @@ module custom_can_node(
             end    
 
             PROCESS: begin    // PROCESS
-                //received_msg = received_msg >> 1;   // Catches extra bit during wait cycle after transmission finishes for bus master
                 bit_stuff_check = 5'b00001;
                 for(i=127; i>=0; i=i-1) begin
                     //$display("NODE: %d. i: %d, scrubbed msg in: %x, BSC: %b",node_num, i, scrubbed_msg_in,bit_stuff_check);
