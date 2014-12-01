@@ -24,6 +24,8 @@ module testbench(CLK, led0, led1, led2, led3);
     input CLK;
     output wire led0, led1, led2, led3;
     
+    wire led4, led5, led6, led7;
+
     reg can_clk = 0;
     reg uart_clk = 0;
     parameter RUN_LEN = 120;    
@@ -36,11 +38,15 @@ module testbench(CLK, led0, led1, led2, led3);
     wire can_lo_in_0, can_hi_in_0;
     wire can_lo_out_1, can_hi_out_1;
     wire can_lo_in_1, can_hi_in_1;
+    wire can_lo_out_2, can_hi_out_2;
+    wire can_lo_in_2, can_hi_in_2;
+    wire can_lo_out_3, can_hi_out_3;
+    wire can_lo_in_3, can_hi_in_3;
 
     wire can_hi, can_lo;
 
 `ifndef SINGLE_NODE
-    assign can_hi = can_hi_out_0 | can_hi_out_1;
+    assign can_hi = can_hi_out_0 | can_hi_out_1 | can_hi_out_2 | can_hi_out_3;
     assign can_lo = ~can_hi;
 `else
     assign can_lo_in_0 = can_lo_out_0;
@@ -69,6 +75,31 @@ module testbench(CLK, led0, led1, led2, led3);
                             led3, 
                             4'h1
                         );
+
+    custom_can_node can2(   can_clk, 
+                            can_clk, 
+                            1'b0, 
+                            can_lo, 
+                            can_lo_out_2, 
+                            can_hi, 
+                            can_hi_out_2, 
+                            led4, 
+                            led5, 
+                            4'h2
+                        );
+
+    custom_can_node can3(   can_clk, 
+                            can_clk, 
+                            1'b0, 
+                            can_lo, 
+                            can_lo_out_3, 
+                            can_hi, 
+                            can_hi_out_3, 
+                            led6, 
+                            led7, 
+                            4'h3
+                        );
+
 `endif
 
     integer i=0;

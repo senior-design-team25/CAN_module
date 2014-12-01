@@ -97,11 +97,24 @@ module custom_can_node(
                 receive_rst <= 1;
                 can_hi_out <= 0;
                 can_lo_out <= 1;
-                message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
+                //message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
+                case(node_num)
+                    0: begin
+                        message_id = 11'h7F8;
+                    end
+                    1: begin
+                        message_id = 11'h7FF;
+                    end
+                    2: begin
+                        message_id = 11'h123;
+                    end
+                    3: begin
+                        message_id = 11'h456;
+                    end
+                endcase
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
                 msg_length = msg_length_base;
-                // Test with random data transmission
-                data[0] = 8'h89;
+                data[0] = 8'h89;        // Test with random data transmission
                 for(i=0; i < data_length; i = i+1) begin
                     message = {message,{data[i]}};
                     msg_length = msg_length + 8;     
@@ -209,6 +222,9 @@ module custom_can_node(
                 $display("NODE: %d, Received message: %x",node_num, scrubbed_msg_in);
                 $display("NODE: %d, RM: %b", node_num, received_msg);
                 $display("NODE: %d, RM: %b", node_num, scrubbed_msg_in);
+
+                /* Process */
+                
                 next_state <= 0;
             end
         endcase   
