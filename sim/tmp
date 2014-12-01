@@ -1,2 +1,1 @@
-NODE:  0 => (Message: 000000000000000000022b03120002ff (len:  52))
-NODE:  1 => (Message: 000000000000000000009183120002ff (len:  52))
+iverilog  *.v -o sim

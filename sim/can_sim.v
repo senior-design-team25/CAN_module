@@ -35,7 +35,7 @@ module custom_can_node(
     input can_clk, sys_clk, reset, can_lo_in, can_hi_in;
     input wire clk_src0, clk_src1;
     input wire[3:0] node_num;
-    output reg can_lo_out, can_hi_out, led0, led1;
+    output reg can_lo_out = 1, can_hi_out = 0, led0, led1;
     output led2, led3;
 
 /*************************************************************************
@@ -57,7 +57,6 @@ module custom_can_node(
 **************************************************************************/
     reg[1:0] state = 2'b00, next_state = 2'b00;
     reg toggle = 0;
-    reg can_hi, can_lo;
     reg id_transmit_flag;
     reg lower_priority = 0;
     reg[31:0] bits_transmitted;
@@ -65,6 +64,7 @@ module custom_can_node(
     reg[127:0] message = 0; 
     
     reg[127:0] received_msg;
+    reg[127:0] scrubbed_msg_in = 0;
     reg receive_rst = 1;
     
     reg[10:0] message_id;
@@ -83,7 +83,8 @@ module custom_can_node(
     integer index = 0;
    
     reg[4:0] bit_stuff_check = 5'b00001;
- 
+    reg flush_bitStuffCheck = 0; 
+
     always@(state, toggle) begin
         case(state)
             IDLE: begin    // IDLE
@@ -92,7 +93,7 @@ module custom_can_node(
                 */
                 bits_transmitted <= 0;
                 bits_received <= 0;
-                //received_msg <= 0;
+                scrubbed_msg_in <= 0;
                 receive_rst <= 1;
                 can_hi_out <= 0;
                 can_lo_out <= 1;
@@ -108,6 +109,7 @@ module custom_can_node(
                 message = {message, {CRC},3'b101,EOF};
                 
                 $display("NODE: %d, (Message: %x (len: %d))",node_num, message, msg_length);                
+                $display("NODE: %d, SM: %b", node_num, message);
                 // For now always transmit
                 next_state <= 1; 
             end
@@ -119,8 +121,7 @@ module custom_can_node(
                  * Takes cycle to latch output bit, so check next cycle
                  */
                 if( lower_priority ) begin
-                     bits_transmitted = msg_length - 1;
-                     //received_msg = {received_msg, can_lo_in};
+                     bits_transmitted = 32'h7FFFFFFE;
                 end else begin
                     /* Dominant = Logic 0 = High voltage
                      * Recessive = Logic 1 = Low voltage
@@ -128,24 +129,29 @@ module custom_can_node(
                      */
                     if(bits_transmitted < (msg_length - 25)) begin
                         if( ((bit_stuff_check == 5'b0) && message[(msg_length-1)-bits_transmitted]) ||
-                                ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
-                             ) begin
+                            ((bit_stuff_check == 5'h1F) && !message[(msg_length-1)-bits_transmitted])
+                        ) begin
                             can_hi_out = !bit_stuff_check[0];
                             can_lo_out = !can_hi_out;
-                            bits_transmitted = bits_transmitted - 1;
+                            // Flush bit_stuff_check
+                            flush_bitStuffCheck = 1;
                         end else begin
                             can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                             can_lo_out = !can_hi_out;
+                            flush_bitStuffCheck = 0;
                         end
                     end else begin
                         can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                         can_lo_out = !can_hi_out;
                     end
                  
-                    bit_stuff_check = {bit_stuff_check[3:0],can_hi_out};
+                    bit_stuff_check = {bit_stuff_check, can_hi_out};
                 end
-                
-                bits_transmitted = bits_transmitted + 1;
+               
+                if(flush_bitStuffCheck)
+                    bit_stuff_check = 5'b00001;
+                else
+                    bits_transmitted = bits_transmitted + 1;
         
                 // While sending id/start bit, set id_transmit flag hi    
                 if(bits_transmitted < 13) 
@@ -155,16 +161,19 @@ module custom_can_node(
 
                 if(bits_transmitted < msg_length) begin
                     next_state <= SENDING;
-                end else begin
-                    next_state <= WAIT;
-                end 
+                end else begin 
+                    if(bits_transmitted == 32'h7FFFFFFF) 
+                        next_state <= WAIT;
+                    else
+                        next_state <= PROCESS;
+                end
             end
 
             WAIT: begin    // WAIT RX 
                 can_hi_out <= 0;
                 can_lo_out <= 1;
                 // Check for end of frame
-                if( (received_msg[6:0] != 7'h7F)  && (bits_received <= msg_length)) begin
+                if( (received_msg[6:0] != 7'h7F) || (bits_received < msg_length_base) ) begin
                     next_state <= WAIT;
                 end else begin
                     next_state <= PROCESS;
@@ -172,7 +181,33 @@ module custom_can_node(
             end    
 
             PROCESS: begin    // PROCESS
-                $display("NODE: %d, Received message: %x",node_num, received_msg);
+                //received_msg = received_msg >> 1;   // Catches extra bit during wait cycle after transmission finishes for bus master
+                bit_stuff_check = 5'b00001;
+                for(i=127; i>=0; i=i-1) begin
+                    //$display("NODE: %d. i: %d, scrubbed msg in: %x, BSC: %b",node_num, i, scrubbed_msg_in,bit_stuff_check);
+                    if(i<=25 || i > bits_received) begin
+                        scrubbed_msg_in = {scrubbed_msg_in, received_msg[i]};
+                    end else begin  
+                        if( ((bit_stuff_check == 5'b00) ) ||
+                            ((bit_stuff_check == 5'h1F) )
+                        ) begin
+                            flush_bitStuffCheck = 1;
+                            scrubbed_msg_in = {1'b0, scrubbed_msg_in};
+                        end else begin
+                            scrubbed_msg_in = {scrubbed_msg_in, received_msg[i]};
+                            flush_bitStuffCheck = 0;
+                        end
+
+                        if(flush_bitStuffCheck) 
+                            bit_stuff_check = 5'b00001;
+                        else
+                            bit_stuff_check = {bit_stuff_check, received_msg[i]};
+                    end
+                end
+
+                $display("NODE: %d, Received message: %x",node_num, scrubbed_msg_in);
+                $display("NODE: %d, RM: %b", node_num, received_msg);
+                $display("NODE: %d, RM: %b", node_num, scrubbed_msg_in);
                 next_state <= 0;
             end
         endcase   
@@ -190,14 +225,14 @@ module custom_can_node(
         end
 
         if(receive_rst) begin
-            received_msg <= 128'b0;
-            bits_received <= 0;
+            received_msg = 128'b0;
+            bits_received = 0;
         end else begin
-            received_msg <= {received_msg, can_lo_in};
-            bits_received <= bits_received + 1;
+            received_msg = {received_msg, can_lo_in};
+            bits_received = bits_received + 1;
         end
-        $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d)",
-                    node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in);
+        $display("NODE: %d, State: %d, CANout: (%d, %d), CANin: (%d, %d), RM: %b (BR: %d)",
+                    node_num, state, can_hi_out, can_lo_out, can_hi_in, can_lo_in, received_msg[61:0],bits_received);
     end
  
     always@(posedge can_clk) begin
@@ -208,3 +243,5 @@ module custom_can_node(
         toggle <= ~toggle;
     end
 endmodule
+
+

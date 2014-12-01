@@ -6,7 +6,7 @@
 CC=iverilog
 CFLAGS=
 LDFLAGS=
-SOURCES=*.v
+SOURCES=testbench.v can_sim.v
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=sim
 LOG=out
