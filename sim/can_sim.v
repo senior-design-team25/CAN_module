@@ -74,16 +74,57 @@ module custom_can_node(
     
     parameter EOF = 7'h7F;
     // Extended format versus standard format base length
-     parameter msg_length_base = 44;  
+    parameter msg_length_base = (44 + 4);  // Added security bits
     `ifdef EXTENDEDFORMAT
         parameter msg_length_base += 18; 
     `endif
+    reg[3:0] src = 0;
     reg[7:0] msg_length = 0;
+    reg[11:0] msg_id = 0;
     integer i = 0;
     integer index = 0;
    
     reg[4:0] bit_stuff_check = 5'b00001;
     reg flush_bitStuffCheck = 0; 
+    reg[7:0] added_bits = 0;
+    reg[3:0] msg_src = 0;
+
+/*************************************************************************
+*   CAN security components
+**************************************************************************/
+    reg[26:0] id_table [15:0];
+    /*  |___ID___|______SRC______| --> 27 bits */
+    integer ii = 0;
+    parameter id_table_len = 16;
+
+    initial begin
+        for(ii=0;ii<15; ii=ii+1) begin
+            id_table[ii] <= 27'hx;
+        end        
+    end
+
+    always@(node_num, state) begin
+        case(node_num)
+            0: begin
+                id_table[0] <= (11'h7FF << 16) | 16'h1;
+                id_table[1] <= (11'h123 << 16) | 16'h2;
+            end
+            1: begin
+                id_table[0] <= (11'h7F8 << 16) | 16'h0;
+                id_table[1] <= (11'h123 << 16) | 16'h2;
+                id_table[2] <= (11'h456 << 16) | 16'h3;
+            end
+            2: begin
+                id_table[0] <= (11'h456 << 16) | 16'h3;
+            end
+            3: begin
+                id_table[0] <= (11'h123 << 16) | 16'h2;
+            end
+        endcase    
+    end    
+/*************************************************************************
+*   CAN state machine implementation
+**************************************************************************/
 
     always@(state, toggle) begin
         case(state)
@@ -97,19 +138,22 @@ module custom_can_node(
                 receive_rst <= 1;
                 can_hi_out <= 0;
                 can_lo_out <= 1;
-                //message_id = (node_num[0]) ? 11'h7FF : 11'h7F8;
                 case(node_num)
                     0: begin
                         message_id = 11'h7F8;
+                        src = 4'h0;
                     end
                     1: begin
                         message_id = 11'h7FF;
+                        src = 4'h1;
                     end
                     2: begin
                         message_id = 11'h123;
+                        src = 4'h2;
                     end
                     3: begin
                         message_id = 11'h456;
+                        src = 4'h3;
                     end
                 endcase
                 message = {1'b0,{message_id},2'b00,{data_length}}; 
@@ -119,7 +163,7 @@ module custom_can_node(
                     message = {message,{data[i]}};
                     msg_length = msg_length + 8;     
                 end
-                message = {message, {CRC},3'b101,EOF};
+                message = {message, {CRC},3'b101,{src},EOF};
                 
                 $display("NODE: %d, (Message: %x (len: %d))",node_num, message, msg_length);                
                 $display("NODE: %d, SM: %b", node_num, message);
@@ -197,8 +241,8 @@ module custom_can_node(
 
             PROCESS: begin    // PROCESS
                 bit_stuff_check = 5'b00001;
+                added_bits = 0;
                 for(i=127; i>=0; i=i-1) begin
-                    //$display("NODE: %d. i: %d, scrubbed msg in: %x, BSC: %b",node_num, i, scrubbed_msg_in,bit_stuff_check);
                     if(i<=25 || i > bits_received) begin
                         scrubbed_msg_in = {scrubbed_msg_in, received_msg[i]};
                     end else begin  
@@ -206,6 +250,7 @@ module custom_can_node(
                             ((bit_stuff_check == 5'h1F) )
                         ) begin
                             flush_bitStuffCheck = 1;
+                            added_bits = added_bits + 1;
                             scrubbed_msg_in = {1'b0, scrubbed_msg_in};
                         end else begin
                             scrubbed_msg_in = {scrubbed_msg_in, received_msg[i]};
@@ -224,7 +269,20 @@ module custom_can_node(
                 $display("NODE: %d, RM: %b", node_num, scrubbed_msg_in);
 
                 /* Process */
-                
+                for(i=0; i<id_table_len; i=i+1) begin
+                    //msg_id = received_msg[((bits_received - added_bits))-:11];
+                    msg_id = received_msg >> ((bits_received - added_bits) - 11);
+                    msg_id = msg_id & 12'h7FF;
+                    msg_src = received_msg >> 8;
+                    $display("NODE: %d, msg_id in: %x, id_table[%d] slice: %x, src: %d",node_num, msg_id, i, id_table[i][26-:11],msg_src);
+                    if(msg_id == id_table[i][26-:11])  begin
+                        if(msg_src == (id_table[i] & 27'h000FFFF)) begin 
+                            i = id_table_len;
+                            $display("NODE: %d, valid id! %x, src: %d",node_num,msg_id,msg_src);
+                        end
+                    end
+                end            
+    
                 next_state <= 0;
             end
         endcase   
