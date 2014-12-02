@@ -63,7 +63,20 @@ NODE:  1, RM: 000000000000000000000000000000000000000000000000000000000000000000
 NODE:  1, RM: 00000000000000000000000000000000000000000000000000000000000000000000000000000001000110000010001001000000000000000101001011111111
 NODE:  1, msg_id in: 123, id_table[          0] slice: 7f8, src:  2
 NODE:  1, msg_id in: 123, id_table[          1] slice: 123, src:  2
-NODE:  1, valid id! 123, src:  2
+NODE:  1, msg_id in: 123, id_table[          2] slice: 456, src:  2
+NODE:  1, msg_id in: 123, id_table[          3] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          4] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          5] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          6] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          7] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          8] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[          9] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         10] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         11] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         12] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         13] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         14] slice: Zzz, src:  2
+NODE:  1, msg_id in: 123, id_table[         15] slice: Zzz, src:  2
 NODE:  1, State: 3, CANout: (0, 1), CANin: (0, 1), RM: 00000000100100011000001100010010000000000000001010010111111111 (BR:         58)
 NODE:  1, (Message: 0000000000000000003ff831200028ff (len:  56))
 NODE:  1, SM: 00000000000000000000000000000000000000000000000000000000000000000000000000111111111110000011000100100000000000000010100011111111
