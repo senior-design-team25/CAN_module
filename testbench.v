@@ -18,9 +18,9 @@ module testbench(CLK, DPSwitch, Switch, LED, SevenSegment, Enable, gpio_P1);
     output[8:1] LED;
     output[7:0] SevenSegment; 
     output[3:1] Enable; 
-	output wire[3:0] gpio_P1;
+    output wire[3:0] gpio_P1;
     wire uart_clk;
-	wire uart_tx = 1'b0;
+    wire uart_tx = 1'b0;
 	 
     wire[1:0] anOut;
     wire CLK_1Khz;
@@ -38,23 +38,23 @@ module testbench(CLK, DPSwitch, Switch, LED, SevenSegment, Enable, gpio_P1);
     HextoSevenSeg seven(CLK_1Khz, {1'b0, index}, SevenSegment, anOut); 
     assign Enable = {1'b1, anOut};
 	 
-	 `ifdef SIM
-	clock_divider clkuart(CLK, uart_clk_115200, 32'd2);
-	 `else
+    `ifdef SIM
+    clock_divider clkuart(CLK, uart_clk_115200, 32'd2);
+    `else
     clock_divider clkuart0(CLK, uart_clk_115200, 32'd52); //115200 baudrate
     clock_divider clkuart1(CLK, uart_clk_9Hz, 32'd1200000);
-	 `endif
+    `endif
     uarttx transmit(uart_clk, uart_nrst, uart_data[7:0], send, ready, gpio_P1[2]);
 
     wire rst;
 	 
-	assign rst = Switch ^ DPSwitch[1];
+    assign rst = Switch ^ DPSwitch[1];
     assign uart_clk = DPSwitch[2] ? uart_clk_115200 : uart_clk_9Hz;   
     assign LED[7:1] = index[6:0];
     assign LED[8] = rst;
-	assign gpio_P1[1] = uart_clk_115200;
-	assign gpio_P1[0] = CLK;
-	assign gpio_P1[3] = 1'b1;
+    assign gpio_P1[1] = uart_clk_115200;  
+    assign gpio_P1[0] = CLK;
+    assign gpio_P1[3] = 1'b1;
 
     always@(posedge uart_clk or posedge rst) begin 
        if(rst) begin
