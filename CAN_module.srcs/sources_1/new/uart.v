@@ -27,9 +27,10 @@ always @(posedge clock115200hz or negedge resetn) begin
     end else begin
         if (state == 0) begin
             tx <= 1'b1;
-            ready <= send ? 1'b0 : 1'b1;
+            ready <= send ? 1'b1 : 1'b1;
             state <= send ? 4'h1 : 4'h0;
         end else begin
+            ready <= 0;
             tx <= state == 4'h1 ? 1'b0 : data[state-2];
             state <= state == 4'h9 ? 4'h0 : state + 1'b1;
         end
