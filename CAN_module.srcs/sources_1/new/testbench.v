@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 `define SINGLE_NODE
 
-module testbench(CLK, rst, swts, led0, led1, leds, can_hi_out, can_lo_out, can_clk_out, uart_tx, uart_rx, test_pass);
+module testbench(CLK, rst, swts, led0, led1, leds, can_hi_out, can_lo_out, can_clk_out, uart_tx, uart_rx, test_pass, receive_rst);
     input CLK;
     input rst, uart_rx;
     input wire[3:0] swts;
@@ -28,7 +28,7 @@ module testbench(CLK, rst, swts, led0, led1, leds, can_hi_out, can_lo_out, can_c
     output wire can_hi_out;
     output wire can_clk_out, uart_tx;
     output wire[5:0] leds;
-    output wire test_pass;
+    output wire test_pass, receive_rst;
     
     wire led4, led5, led6, led7;
 
@@ -51,51 +51,62 @@ module testbench(CLK, rst, swts, led0, led1, leds, can_hi_out, can_lo_out, can_c
     reg[255:0] message = 256'd0;
     reg[7:0] uart_data;
     wire uart_clk_115200;
+    reg[3:0] cmd_index = 0;
+    
     
     clock_divider clkuarttx(CLK, uart_clk_115200, 32'd434); //115200 baudrate
     clock_divider clkuartrx(CLK, uart_clk_rx, 32'd108);     //460800baudrate
 //    uarttx transmit(uart_clk_115200, rst, uart_data, recv, ready, uart_tx);
-//    uartrx receive(uart_clk_rx, rst, uart_data, recv, uart_rx);
+    uartrx receive(uart_clk_rx, rst, uart_data, recv, uart_rx);
 
     uarttx transmit(uart_clk_115200, uart_nrst, uart_data, send, ready, uart_tx);
     
     reg[6:0] index = 7'h00;
-
     reg[6:0] index_next = 7'h00;
+    reg[63:0] cmd = 74'd0;
 
     assign CLK_out = CLK;
     assign can_clk = (swts[0]) ? can_clk50kHz : 
                      (swts[1]) ? can_clk100Hz :
                       swts[2];
       
-    //assign leds[3:0] = bits_sent[3:0];
     assign leds[5] = uart_tx;
     assign leds[4] = uart_rx;
-    //assign leds[4] = uart_data;
-    //assign leds[5] = recv;
     assign uart_clk = uart_clk_115200;
     assign can_clk_out = can_clk;    
     assign test_pass = led0;
-//    always@(posedge recv) begin
-//        if(rst) 
-//            send <= 0;
-//        else
-//            send <= 1;
-//        uart_data <= uart_data_in;
-//    end
+    assign receive_rst = led1;
+
+    always@(posedge uart_clk_115200) begin
+        if(rst) begin
+            cmd <= 0;
+            cmd_index <= 0;
+        end 
+        if(recv && !cmd_rdy) begin
+            cmd <= {cmd[63:8], uart_data_in[7:0]};
+            cmd_index <= cmd_index + 1'b1;
+        end
+        if(cmd_index == 7)
+            cmd_rdy <= 1;
+        else begin
+            cmd_rdy <= 0;
+        end
+        if(node_ack) begin
+            cmd_rdy <= 0;
+            cmd_index <= 0;
+        end
+    end
     
     always@(posedge uart_clk or posedge rst) begin 
        if(rst) begin
            uart_nrst <= 1'b0;
            index <= 7'd32;
-           //message <= {"{bits_sent: #", 2'b00, bits_sent[5:0] ,"#, state: #", swts[3], 4'b00, state, "#}"};
            message <= {"{message: #", message_in, "#}"};
            uart_data <= 8'h00;
            send <= 1'b0;
        end else begin
            uart_nrst <= 1;
            if(index == 7'd32) 
-               //message <= {"{bits_sent: #", 2'b00, bits_sent[5:0] ,"#, state: #", swts[3], 4'b00, state, "#}"}; 
                message <= {"{message: #", message_in, "#}"};
            else
                message <= message;
@@ -154,42 +165,4 @@ module testbench(CLK, rst, swts, led0, led1, leds, can_hi_out, can_lo_out, can_c
                            state1,
                            message_in1
                         );
-//`ifndef SINGLE_NODE
-//   custom_can_node can1(   can_clk, 
-//                           can_clk, 
-//                           rst, 
-//                           can_lo, 
-//                           can_lo_out_1, 
-//                           can_hi, 
-//                           can_hi_out_1, 
-//                           led2, 
-//                           led3, 
-//                           4'h1
-//                       );
-
-//   custom_can_node can2(   can_clk, 
-//                           can_clk, 
-//                           rst, 
-//                           can_lo, 
-//                           can_lo_out_2, 
-//                           can_hi, 
-//                           can_hi_out_2, 
-//                           led4, 
-//                           led5, 
-//                           4'h2
-//                       );
-
-//   custom_can_node can3(   can_clk, 
-//                           can_clk, 
-//                           rst, 
-//                           can_lo, 
-//                           can_lo_out_3, 
-//                           can_hi, 
-//                           can_hi_out_3, 
-//                           led6, 
-//                           led7, 
-//                           4'h3
-//                       );
-
-//`endif
 endmodule
