@@ -18,7 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+//(╯°□°）╯︵ ┻�?┻
 
 module faux_can(
         can_clk,
@@ -34,14 +34,17 @@ module faux_can(
         bits_sent,
         state_out,
         message_out,
-        cmd_in
+        cmd_in,
+        cmd_in_ready,
+        cmd_awk
     );
-    input can_clk, sys_clk, reset, can_lo_in, can_hi_in;
+    input can_clk, sys_clk, reset, can_lo_in, can_hi_in, cmd_in_ready;
     input wire[3:0] node_num;
-    input wire[63:0] cmd_in;
+    input wire[31:0] cmd_in;
     output reg can_lo_out, can_hi_out;
     output wire[5:0] bits_sent;
     output wire led0, led1;
+    output reg cmd_awk;
     output wire[2:0] state_out;
     output reg[127:0] message_out;
 
@@ -67,27 +70,36 @@ module faux_can(
 /*************************************************************************
 *   CMD paramters
 **************************************************************************/
-    reg[7:0] CMD_CAR;
-    reg[7:0] CMD_DEV;
-    reg[31:0] CMD_DATA;
-    reg[7:0] CMD_CHECKSUM;
-    assign CMD_CAR = cmd_in[63:56];
-    assign CMD_DEV = cmd_in[55:48];
-    assign CMD_DATA = cmd_in[47:8];
-    assign CMD_CHECKSUM = cmd_in[7:0];
+    wire[7:0] CMD_CAR;
+    wire[7:0] CMD_DEVICE;
+    //wire[31:0] CMD_DATA;
+    wire[7:0] CMD_DATA;
+    wire[7:0] CMD_CHECKSUM;
+    // assign CMD_CAR = cmd_in[63:56];
+    // assign CMD_DEVICE = cmd_in[55:48];
+    // assign CMD_DATA = cmd_in[47:8];
+    // assign CMD_CHECKSUM = cmd_in[7:0];
+    parameter DEVICE_OFFSET = 8;
+    parameter DATA_OFFSET = 16;
+    parameter CHECKSUM_OFFSET = 24;
+    assign CMD_DEVICE = cmd_in[(31-(DEVICE_OFFSET)) -: 8];
+    assign CMD_DATA = cmd_in[(31-(DATA_OFFSET)) -: 8];
+    assign CMD_CHECKSUM = cmd_in[(31-(CHECKSUM_OFFSET)) -: 8];
 
     //
     //  Command Formats
     //
-    parameter CLOSE_BRAKE = 8'h00;
-    parameter OPEN_BRAKE = 8'h05;
-    parameter SET_MOTOR = 8'h0F; 
+    parameter CLOSE_BRAKE = "c";
+    parameter OPEN_BRAKE = "o";
+    parameter SET_MOTOR = "s"; 
 
 /*************************************************************************
 *   CMD to node ID lookup table
 **************************************************************************/
-    parameter BRAKES = 8'h00;
-    parameter MOTORS = 8'h01;
+    parameter BRAKES = "b";     // 0x62
+    parameter MOTORS = "m";     // 0x6D  ┌∩�?(◣_◢)┌∩�?)
+    parameter CAN_BRAKES_ID = 11'h008;
+    parameter CAN_MOTOR_ID = 11'h070;
 
 /*************************************************************************
 *   CAN frame components
@@ -135,7 +147,7 @@ module faux_can(
     reg[2:0] data_in_count = 3'h0;
     reg[3:0] data_bits_in = 4'h0;
     reg[7:0] data_in[7:0];
-    reg transmit = 1'b0;
+    reg[2:0] run_iteration = 3'h0;
 
 /*************************************************************************
 *   CAN security components
@@ -186,66 +198,64 @@ module faux_can(
                 can_hi_out = 0;
                 can_lo_out = 1;
                 message = 128'd0;
+                cmd_awk <= 0;
                 
-                case(CMD_CAR)
-                    //
-                    //  Talk to internal network (not another car)
-                    //
+                //
+                //  Perform tablelookup for CMD level device ID to bus ID.
+                //  This translation is done for security purposes (embedded node does not 
+                //      generate bus ID on its own in case of compromise).
+                //  
+                node_id <= 0;
+                case(node_num)
                     0: begin
-                        //
-                        //  Perform tablelookup for CMD level device ID to bus ID.
-                        //  This translation is done for security purposes (embedded node does not 
-                        //      generate bus ID on its own in case of compromise).
-                        //  
-                        node_id <= 0;
-                        case(CMD_DEV)
-                            BRAKES: begin
-                                message_id <= 11'h008;
+                        if(cmd_in_ready) begin
+                            data_length <= 1;
+                            // for(i = 0; i < 4; i = i+1) 
+                            //     data[i] <= CMD_DATA[(((4-i)*8)-1) -: 8];        
+                            data[0] <= CMD_DATA;                         
+                                    
+                            case(CMD_DEVICE)
+                                BRAKES: begin
+                                    message_id <= CAN_BRAKES_ID;
+                                end
+                                MOTORS: begin
+                                    message_id <= CAN_MOTOR_ID;
+                                end
+                                default: begin
+                                    message_id <= 11'h7FF;
+                                end
+                            endcase
+                        end else begin
+                            message_id <= 11'h7FF;
+                            data_length <= 4'd0;
+                            data[0] <= 8'h00;
+                        end
+                    end
+
+                    default: begin
+                        case(node_num)
+                            1: begin
+                                data_length <= 1;
+                                data[0] <= 8'h12;
+                                message_id <= 11'h100;
                             end
-                            MOTORS: begin
-                                message_id <= 11'h010;
-                            end
-                            default: begin
-                                message_id <= 11'h7FF;
+                            2: begin
+                                data_length <= 1;
+                                data[0] <= 8'h34;
+                                message_id <= 11'h101;
                             end
                         endcase
                     end
-                    default: begin
-                        // Not currently supported. Move transceiver based commands here?
-                    end
                 endcase
 
-                case(node_num)
-                    0: begin
-                        node_id = 11'h123;
-                        message_id = 11'h123;
-                        src = 4'h0;
-                        data[0] = 8'h89;        // Test with random data transmission
-                        transmit = 0;
-                    end
-                    1: begin
-                        node_id = 11'h111;
-                        message_id = 11'h111;
-                        src = 4'h1;
-                        data[0] = 8'h67;        // Test with random data transmission
-                        transmit = 1;
-                    end
-                    2: begin
-                        node_id = 11'h321;
-                        message_id = 11'h124;
-                        src = 4'h2;
-                        data[0] = 8'h00;
-                        transmit = 0;
-                    end
-                    3: begin
-                        node_id = 11'h456;
-                        message_id = 11'h456;   
-                        src = 4'h3;
-                        data[0] = 8'h00;
-                        transmit = 0;
-                    end
-                endcase
-                message = {1'b0,message_id,2'b00,data_length}; 
+                if(run_iteration > 3'h3) begin
+                    message_id <= 11'h7FF;
+                    message = {1'b0,11'h7FF,2'b00,data_length};
+                    run_iteration <= 3'h0;
+                end else begin
+                    message = {1'b0,message_id,2'b00,data_length};
+                end
+                
                 msg_length = msg_length_base;
                 for(i=0; i < 8; i = i+1) begin
                     if(i < data_length) begin
@@ -264,7 +274,10 @@ module faux_can(
             end
 
             SENDING: begin    // SENDING
-                receive_rst <= 0;
+                receive_rst <= 0;    
+//                if(bits_transmitted == 32'd0)
+//                    cmd_awk <= 1'b1;
+//                else cmd_awk <= 1'b0;
                 /* Check transmitted bit with bus
                  * If not equal, lower priority. Kick off bus 
                  * Takes cycle to latch output bit, so check next cycle
@@ -272,6 +285,7 @@ module faux_can(
                 if( lower_priority ) begin
                      bits_transmitted_next = 32'h7FFFFFFE;
                      next_state <= WAIT;
+                     run_iteration <= 3'h0;
                 end else begin
                     /* Dominant = Logic 0 = High voltage
                      * Recessive = Logic 1 = Low voltage
@@ -289,11 +303,13 @@ module faux_can(
                     else
                         id_transmit_flag <= 0;
 
-                    if(bits_transmitted < msg_length-1) 
+                    if(bits_transmitted < msg_length-1) begin
                         next_state <= SENDING;
-                    else
+                    end else begin
                         // this node was bus master and finished transmission. 
                         next_state <= PROCESS;
+                        run_iteration <= run_iteration + 1'b1;
+                    end
                 end
             end
 
@@ -301,6 +317,7 @@ module faux_can(
                 can_hi_out = 0;
                 can_lo_out = 1;
                 receive_rst = 0;
+                cmd_awk <= 1'b0;
                 // Check for end of frame
                 if( (received_msg[6:0] != 7'h7F) || (bits_received < msg_length_base) ) begin
                     next_state <= WAIT;
@@ -310,6 +327,13 @@ module faux_can(
             end    
             
             PROCESS: begin
+                //
+                //  Change to id_in when parsing fully working
+                //
+                if((message_id == CAN_BRAKES_ID) || (message_id == CAN_MOTOR_ID))
+                    cmd_awk <= 1'b1;  
+                else 
+                    cmd_awk <= 1'b0;
                 can_hi_out = 0;
                 can_lo_out = 1;
                 receive_rst = 0;
