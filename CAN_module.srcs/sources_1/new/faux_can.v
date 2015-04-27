@@ -36,7 +36,8 @@ module faux_can(
         message_out,
         cmd_in,
         cmd_in_ready,
-        cmd_awk
+        cmd_awk,
+        pwm_out
     );
     input can_clk, sys_clk, reset, can_lo_in, can_hi_in, cmd_in_ready;
     input wire[3:0] node_num;
@@ -47,12 +48,16 @@ module faux_can(
     output reg cmd_awk;
     output wire[2:0] state_out;
     output reg[127:0] message_out;
+    output wire pwm_out;
 
     assign bits_sent[5:0] = bits_received[5:0];
     assign state_out = state;
     reg[7:0] test = 8'h00;
     assign led0 = (test == 8'h67);
     assign led1 = receive_rst;
+    
+    reg[7:0] duty;
+    servo_pwm pwm(sys_clk, duty, pwm_out);
 /*************************************************************************
 *   State machine constants
 **************************************************************************/
@@ -72,13 +77,8 @@ module faux_can(
 **************************************************************************/
     wire[7:0] CMD_CAR;
     wire[7:0] CMD_DEVICE;
-    //wire[31:0] CMD_DATA;
     wire[7:0] CMD_DATA;
     wire[7:0] CMD_CHECKSUM;
-    // assign CMD_CAR = cmd_in[63:56];
-    // assign CMD_DEVICE = cmd_in[55:48];
-    // assign CMD_DATA = cmd_in[47:8];
-    // assign CMD_CHECKSUM = cmd_in[7:0];
     parameter DEVICE_OFFSET = 8;
     parameter DATA_OFFSET = 16;
     parameter CHECKSUM_OFFSET = 24;
@@ -139,6 +139,7 @@ module faux_can(
    
     reg[4:0] bit_stuff_check = 5'b00001;
     reg flush_bitStuffCheck = 0; 
+    reg slave = 0;
     reg[7:0] added_bits = 0;
     reg[3:0] msg_src = 0;
     
@@ -199,7 +200,21 @@ module faux_can(
                 can_lo_out = 1;
                 message = 128'd0;
                 cmd_awk <= 0;
-                
+                slave <= 0;
+                if(reset) begin
+                    case(node_num)
+                        0: begin
+                            duty <= 0;
+                        end
+                        1: begin
+                            duty <= 8'h255;
+                        end
+                        2: begin
+                            duty <= 8'h0;
+                        end
+                    endcase
+                end
+                 
                 //
                 //  Perform tablelookup for CMD level device ID to bus ID.
                 //  This translation is done for security purposes (embedded node does not 
@@ -209,9 +224,7 @@ module faux_can(
                 case(node_num)
                     0: begin
                         if(cmd_in_ready) begin
-                            data_length <= 1;
-                            // for(i = 0; i < 4; i = i+1) 
-                            //     data[i] <= CMD_DATA[(((4-i)*8)-1) -: 8];        
+                            data_length <= 1;      
                             data[0] <= CMD_DATA;                         
                                     
                             case(CMD_DEVICE)
@@ -239,7 +252,7 @@ module faux_can(
                                 data[0] <= 8'h12;
                                 message_id <= 11'h100;
                             end
-                            2: begin
+                            2: begin                            
                                 data_length <= 1;
                                 data[0] <= 8'h34;
                                 message_id <= 11'h101;
@@ -248,14 +261,14 @@ module faux_can(
                     end
                 endcase
 
-                if(run_iteration > 3'h3) begin
-                    message_id <= 11'h7FF;
-                    message = {1'b0,11'h7FF,2'b00,data_length};
-                    run_iteration <= 3'h0;
-                end else begin
-                    message = {1'b0,message_id,2'b00,data_length};
-                end
-                
+//                if(run_iteration > 3'h3) begin
+//                    message_id <= 11'h7FF;
+//                    message = {1'b0,11'h7FF,2'b00,data_length};
+//                    run_iteration <= 3'h0;
+//                end else begin
+//                    message = {1'b0,message_id,2'b00,data_length};
+//                end
+                message = {1'b0, message_id,2'b00,data_length};
                 msg_length = msg_length_base;
                 for(i=0; i < 8; i = i+1) begin
                     if(i < data_length) begin
@@ -275,9 +288,6 @@ module faux_can(
 
             SENDING: begin    // SENDING
                 receive_rst <= 0;    
-//                if(bits_transmitted == 32'd0)
-//                    cmd_awk <= 1'b1;
-//                else cmd_awk <= 1'b0;
                 /* Check transmitted bit with bus
                  * If not equal, lower priority. Kick off bus 
                  * Takes cycle to latch output bit, so check next cycle
@@ -286,12 +296,13 @@ module faux_can(
                      bits_transmitted_next = 32'h7FFFFFFE;
                      next_state <= WAIT;
                      run_iteration <= 3'h0;
+                     slave <= 1'b1;
                 end else begin
                     /* Dominant = Logic 0 = High voltage
                      * Recessive = Logic 1 = Low voltage
                      * Bit stuffing. Should not bit stuff during CRC and EoF transmission
                      */
-
+                    slave <= 1'b0;
                     can_hi_out = !message[(msg_length-1) - bits_transmitted];    
                     can_lo_out = !can_hi_out; 
                
@@ -330,10 +341,27 @@ module faux_can(
                 //
                 //  Change to id_in when parsing fully working
                 //
-                if((message_id == CAN_BRAKES_ID) || (message_id == CAN_MOTOR_ID))
-                    cmd_awk <= 1'b1;  
-                else 
-                    cmd_awk <= 1'b0;
+                case(node_num)
+                    0: begin
+                        if(((message_id) == CAN_BRAKES_ID) || ((message_id) == CAN_MOTOR_ID)) 
+                            cmd_awk <= 1'b1;
+                        else
+                            cmd_awk <= 1'b0;
+                    end
+                    1: begin
+                        if(((id_in) == CAN_BRAKES_ID)) 
+                            duty <= (data_in[0]);
+                        else
+                            duty <= duty;
+                    end             
+                    2: begin
+                        if(((id_in) == CAN_MOTOR_ID))
+                            duty <= (data_in[0]);
+                        else
+                            duty <= duty;
+                    end
+                endcase
+                    
                 can_hi_out = 0;
                 can_lo_out = 1;
                 receive_rst = 0;
@@ -367,12 +395,12 @@ module faux_can(
                 data_in[i] = 8'h00;
         end else begin
             received_msg = {received_msg[126:0], can_lo_in};
-            if(bits_received > 1 && bits_received < (13)) 
+            if(bits_received > (1-slave) && bits_received < (13-slave)) 
                 id_in = {id_in[9:0], can_lo_in};
             // skip two bits between ID and data length
-            else if(bits_received > (14) && bits_received < (19))
+            else if(bits_received > (14-slave) && bits_received < (19-slave))
                 data_len_in = {data_len_in[2:0], can_lo_in};
-            else if(bits_received > (18) && (bits_received < (19)+(data_len_in * 8))) begin
+            else if(bits_received > (18-slave) && (bits_received < (19-slave)+(data_len_in * 8))) begin
                 data_in[data_in_count] = {data_in[data_in_count][6:0], can_lo_in};
                 data_bits_in = data_bits_in + 1;
                 if(data_bits_in == 4'h8) begin
